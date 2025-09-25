@@ -1,0 +1,12 @@
+﻿# Ignorar dades brutes, backups grans i fitxers temporals
+data/raw/
+data/refs/
+*.zip
+*.docx
+*.bak
+*.pyc
+__pycache__/
+.vscode/
+.idea/
+# ignorar fitxers de configuració locals
+*.local
