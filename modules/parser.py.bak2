@@ -1,0 +1,137 @@
+﻿# parser.py â€” TIQQUN PRO
+import re, json
+from typing import Optional
+from .logic import tech_eval
+from .simbolic import flow_score
+from .motor import decide_action  # â† usem el decisor PRO (pot odds + SPR)
+
+# Estat de sessiÃ³
+STATE = {
+    'players': 6,
+    'bb': 1.0,
+    'hero_cards': [],
+    'board': [],
+    'street': 'preflop',
+    'pot': 0.0,
+    'to_call_hero': 0.0,
+    'hero_seat': 3,
+    'stack_effective': 100.0,   # en Big Blinds (BB). Per defecte: 100bb
+    # Nota: si vols stacks exactes per rival, els podem afegir mÃ©s endavant.
+}
+
+def _ref_line() -> str:
+    return (
+        f"REF players={STATE['players']} bb={STATE['bb']} street={STATE['street']} "
+        f"pot={STATE['pot']} to_call={STATE['to_call_hero']} "
+        f"stackBB={STATE['stack_effective']} hero={STATE['hero_cards']} board={STATE['board']}"
+    )
+
+def _run_eval() -> str:
+    # 1) Avaluacions base
+    tech = tech_eval(
+        STATE['hero_cards'],
+        STATE['board'],
+        STATE['players'],
+        STATE['pot'],
+        STATE['to_call_hero'],
+        STATE['hero_seat']
+    )
+    flow = flow_score(STATE['hero_cards'], STATE['street'], STATE['board'])
+
+    # 2) SPR (Stack-to-Pot Ratio)
+    stack_chips = STATE.get('stack_effective', 100.0) * STATE['bb']  # BB â†’ xip
+    denom = STATE['pot'] if STATE['pot'] > 0 else max(STATE['bb'], 1e-9)
+    spr = stack_chips / denom
+
+    # 3) DecisiÃ³ PRO (pot odds + SPR + fusiÃ³ tech/flow)
+    out = decide_action(tech, flow, STATE['pot'], STATE['to_call_hero'], spr)
+
+    # 4) Missatge resum
+    sizing_txt = f" sizing={out.sizing:.0f}%pot" if out.sizing is not None else ""
+    return (
+        f"RECOM {out.decision}{sizing_txt} conf={out.conf_final:.2f} (SPR={spr:.2f}) | "
+        + "; ".join(out.reasons)
+    )
+
+def parse_line(line: str) -> Optional[str]:
+    line = line.strip()
+    if not line or line.startswith('#'):
+        return None
+
+    # NEW T=6 BB=1.0 STACK=120 HERO=As Kd
+    if line.startswith('NEW'):
+        m = re.search(r'T=(\d+)', line)
+        if m: STATE['players'] = int(m.group(1))
+
+        m = re.search(r'BB=([0-9.]+)', line)
+        if m: STATE['bb'] = float(m.group(1))
+
+        m = re.search(r'STACK=([0-9.]+)', line)         # â† nou: stack efectiu en BB
+        if m: STATE['stack_effective'] = float(m.group(1))
+
+        m2 = re.search(r'HERO=([A-Za-z0-9]+)[,\s]+([A-Za-z0-9]+)', line)
+        if m2: STATE['hero_cards'] = [m2.group(1), m2.group(2)]
+
+        STATE['board'] = []
+        STATE['street'] = 'preflop'
+        STATE['pot'] = 0.0
+        STATE['to_call_hero'] = 0.0
+        return f"OK NEW T={STATE['players']} BB={STATE['bb']} STACK={STATE['stack_effective']} HERO={STATE['hero_cards']}"
+
+    # SEATS _ _ H _ _ _
+    if line.startswith('SEATS'):
+        parts = line.split()[1:]
+        try:
+            hero_idx = parts.index('H')
+            STATE['hero_seat'] = hero_idx + 1
+        except ValueError:
+            STATE['hero_seat'] = 3
+        return f"OK SEATS {parts} hero_seat={STATE['hero_seat']}"
+
+    # Tauler
+    if line.startswith('F '):
+        STATE['board'] = line.split()[1:4]
+        STATE['street'] = 'flop'
+        return _run_eval()
+
+    if line.startswith('T '):
+        STATE['board'].append(line.split()[1])
+        STATE['street'] = 'turn'
+        return _run_eval()
+
+    if line.startswith('R '):
+        STATE['board'].append(line.split()[1])
+        STATE['street'] = 'river'
+        return _run_eval()
+
+    # Accions: A <who> <act> [amount]
+    # act: b=bet, r=raise, a=allin, c=call, f=fold
+    if line.startswith('A '):
+        try:
+            _, who, act, *rest = line.split()
+            amt = float(rest[0]) if rest else 0.0
+        except Exception:
+            return 'ERR A format'
+
+        if act in ('b', 'r', 'a'):
+            # puja el pot i potencialment el to_call per a l'heroi
+            STATE['pot'] += amt
+            STATE['to_call_hero'] = max(STATE['to_call_hero'], amt)
+        elif act == 'c':
+            # el call â€œigualariaâ€ lâ€™Ãºltim to_call
+            STATE['pot'] += STATE['to_call_hero']
+            STATE['to_call_hero'] = 0.0
+        elif act == 'f':
+            # no canvia pot ni to_call per a lâ€™heroi
+            pass
+        else:
+            return 'ERR A act'
+
+        return _ref_line()
+
+    if line.startswith('END'):
+        st = json.dumps(STATE, ensure_ascii=False)
+        return f"END STATE {st}"
+
+    return "ERR cmd"
+

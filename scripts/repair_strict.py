@@ -1,0 +1,53 @@
+﻿# repair_strict.py
+import json
+from pathlib import Path
+
+def extract_first_json(s: str):
+    start = None
+    depth = 0
+    in_str = False
+    esc = False
+    for i, ch in enumerate(s):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == '{':
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0 and start is not None:
+                    return s[start:i+1]
+    return None
+
+p = Path('data/interim/phh_parsed')
+files = sorted(p.glob('*.jsonl'))
+if not files:
+    print('No .jsonl files found in', p)
+    raise SystemExit(1)
+
+for f in files:
+    print('Processing', f.name)
+    txt = f.read_text(encoding='utf-8', errors='replace')
+    extracted = extract_first_json(txt)
+    if not extracted:
+        print('  ERROR: no balanced JSON found in', f.name)
+        continue
+    try:
+        obj = json.loads(extracted)
+    except Exception as e:
+        print('  ERROR: extracted JSON invalid:', e)
+        print('  snippet:', extracted[:800])
+        continue
+    out = f.with_name(f.stem + '.clean.jsonl')
+    out.write_text(json.dumps(obj, ensure_ascii=False) + '\\n', encoding='utf-8')
+    print('  Wrote clean file:', out.name)
+print('Done.')

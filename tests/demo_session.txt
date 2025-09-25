@@ -1,0 +1,17 @@
+
+# Demo simple
+NEW T=6 BB=1 HERO=As Ks
+SEATS H 2 3 4 5 6
+A 2 b 3
+A 3 c
+A 4 f
+A 5 c
+A 6 c
+F Th Qh 2s
+A 2 b 6
+A 3 c
+A 5 c
+T 9h
+A 2 b 12
+R Jh
+END
