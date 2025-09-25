@@ -1,0 +1,38 @@
+{
+  "MrBlue": {
+    "hands": 4,
+    "vpip": 100,
+    "pfr": 0,
+    "threebet": 0
+  },
+  "MrBlonde": {
+    "hands": 4,
+    "vpip": 0,
+    "pfr": 0,
+    "threebet": 0
+  },
+  "MrWhite": {
+    "hands": 4,
+    "vpip": 0,
+    "pfr": 0,
+    "threebet": 0
+  },
+  "MrPink": {
+    "hands": 4,
+    "vpip": 100,
+    "pfr": 100,
+    "threebet": 0
+  },
+  "MrBrown": {
+    "hands": 4,
+    "vpip": 0,
+    "pfr": 0,
+    "threebet": 0
+  },
+  "Pluribus": {
+    "hands": 4,
+    "vpip": 0,
+    "pfr": 0,
+    "threebet": 0
+  }
+}
